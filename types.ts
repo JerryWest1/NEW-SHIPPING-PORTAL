@@ -59,6 +59,8 @@ export interface Shipment {
   createdByName?: string; // Name of the user who created the shipment
   labelUrl?: string; // Mock URL for the PDF
   price?: number; // Cost of shipment
+  fedexInvoiceNumber?: string; // FedEx billing invoice number matched from FBO CSV
+  fedexInvoiceImportedAt?: string; // Timestamp of when invoice number was imported
   trackingUrl?: string; // Real-time tracking link provider
   lastResentDate?: string; // Timestamp of when the label was last resent
   trackingHistory?: TrackingEvent[];
