@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, Package, Eye, Trash2, ChevronDown, Printer, X, Edit2, Check, Upload } from 'lucide-react';
-import Papa from 'papaparse';
+import React, { useState, useEffect } from 'react';
+import { Search, Package, Eye, Trash2, ChevronDown, Printer, X, Edit2, Check } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
@@ -34,7 +33,6 @@ interface Shipment {
   reference?: string;
   referenceEditedBy?: string;
   referenceEditedAt?: string;
-  fedexInvoiceNumber?: string;
   [key: string]: any;
 }
 
@@ -50,9 +48,7 @@ export const ShipmentHistory: React.FC<ShipmentHistoryProps> = ({
   initialSearchTerm
 }: ShipmentHistoryProps) => {
   const { user: currentUser } = useAuth();
-  const isPriceAuthorized =
-    currentUser?.email?.toLowerCase() === 'jerry@westmarq.com' ||
-    currentUser?.name?.trim().toLowerCase() === 'jerry';
+  const isPriceAuthorized = currentUser?.email?.toLowerCase() === 'jerry@westmarq.com';
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,75 +57,6 @@ export const ShipmentHistory: React.FC<ShipmentHistoryProps> = ({
   const [editingReferenceId, setEditingReferenceId] = useState<string | null>(null);
   const [tempReference, setTempReference] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const invoiceCsvInputRef = useRef<HTMLInputElement | null>(null);
-
-  const normalizeTrackingNumber = (value: unknown) => String(value || '').replace(/\D/g, '');
-
-  const formatInvoiceNumber = (value: unknown) => String(value || '').trim();
-
-  const handleInvoiceCsvUpload = (file: File | null) => {
-    if (!file) return;
-
-    Papa.parse<Record<string, string>>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        try {
-          const invoiceByTracking = new Map<string, string>();
-
-          results.data.forEach((row) => {
-            const trackingNumber = normalizeTrackingNumber(row['Express or Ground Tracking ID']);
-            const invoiceNumber = formatInvoiceNumber(row['Invoice Number']);
-            if (trackingNumber && invoiceNumber) {
-              invoiceByTracking.set(trackingNumber, invoiceNumber);
-            }
-          });
-
-          if (invoiceByTracking.size === 0) {
-            showNotification('No invoice rows found in CSV', 'error');
-            return;
-          }
-
-          let matched = 0;
-          let updated = 0;
-          const importedAt = new Date().toISOString();
-
-          for (const shipment of shipments) {
-            const trackingNumber = normalizeTrackingNumber(shipment.trackingNumber);
-            const invoiceNumber = invoiceByTracking.get(trackingNumber);
-
-            if (!invoiceNumber) continue;
-            matched++;
-
-            if (shipment.fedexInvoiceNumber !== invoiceNumber) {
-              await updateDoc(doc(db, 'shipments', shipment.id), {
-                fedexInvoiceNumber: invoiceNumber,
-                fedexInvoiceImportedAt: importedAt
-              });
-              updated++;
-            }
-          }
-
-          showNotification(`Matched ${matched} shipments. Updated ${updated}.`, 'success');
-        } catch (err) {
-          console.error('Error importing FedEx invoice CSV:', err);
-          showNotification('Failed to import FedEx invoice CSV', 'error');
-        } finally {
-          if (invoiceCsvInputRef.current) {
-            invoiceCsvInputRef.current.value = '';
-          }
-        }
-      },
-      error: (err) => {
-        console.error('Error parsing FedEx invoice CSV:', err);
-        showNotification('Failed to parse FedEx invoice CSV', 'error');
-        if (invoiceCsvInputRef.current) {
-          invoiceCsvInputRef.current.value = '';
-        }
-      }
-    });
-  };
-
   // Temp function to fix stamps
   const fixStamps = async () => {
     try {
@@ -386,25 +313,7 @@ export const ShipmentHistory: React.FC<ShipmentHistoryProps> = ({
             <h2 className="text-2xl font-bold text-slate-900">Shipment History</h2>
             <p className="text-slate-500">Track and manage past shipments</p>
           </div>
-          {isPriceAuthorized && (
-            <div className="flex items-center gap-2">
-              <input
-                ref={invoiceCsvInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                onChange={(e) => handleInvoiceCsvUpload(e.target.files?.[0] || null)}
-              />
-              <button
-                onClick={() => invoiceCsvInputRef.current?.click()}
-                className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-200 flex items-center gap-1.5"
-              >
-                <Upload size={14} />
-                Import FedEx CSV
-              </button>
-              <button onClick={fixStamps} className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200">Fix Stamps</button>
-            </div>
-          )}
+          {isPriceAuthorized && <button onClick={fixStamps} className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200">Fix Stamps</button>}
         </div>
 
       {/* Search and Filter Bar */}
@@ -477,7 +386,7 @@ export const ShipmentHistory: React.FC<ShipmentHistoryProps> = ({
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Carrier</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Created By</th>
-                  {isPriceAuthorized && <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Amount</th>}
+                  {isPriceAuthorized && <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Price</th>}
                   <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Return</th>
                   <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -573,16 +482,7 @@ export const ShipmentHistory: React.FC<ShipmentHistoryProps> = ({
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500">{shipment.createdBy || shipment.createdByEmail || 'System'}</td>
                       {isPriceAuthorized && (
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                          <div className="flex flex-col">
-                            <span>
-                              {shipment.price ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(shipment.price) : '-'}
-                            </span>
-                            {shipment.fedexInvoiceNumber && (
-                              <span className="text-[11px] text-slate-500 font-mono mt-0.5">
-                                Invoice #{shipment.fedexInvoiceNumber}
-                              </span>
-                            )}
-                          </div>
+                          {shipment.price ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(shipment.price) : '-'}
                         </td>
                       )}
                       <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -671,18 +571,6 @@ export const ShipmentHistory: React.FC<ShipmentHistoryProps> = ({
                     <span>{formatDate(shipment.createdAt)}</span>
                     <a href={`https://www.fedex.com/fedextrack/?trknbr=${shipment.trackingNumber}`} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-mono">{shipment.trackingNumber}</a>
                   </div>
-                  {isPriceAuthorized && (
-                    <div className="text-xs text-slate-500">
-                      <span className="font-medium text-slate-700">
-                        {shipment.price ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(shipment.price) : '-'}
-                      </span>
-                      {shipment.fedexInvoiceNumber && (
-                        <div className="font-mono mt-0.5">
-                          Invoice #{shipment.fedexInvoiceNumber}
-                        </div>
-                      )}
-                    </div>
-                  )}
                   <div className="flex justify-end gap-2 pt-2">
                     <button onClick={() => setSelectedShipmentId(shipment.id)} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-medium flex items-center gap-1">
                       <Eye size={14} /> View
