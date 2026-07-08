@@ -1,0 +1,5 @@
+{
+  "name": "FedEx Label Manager",
+  "description": "Professional shipping management portal connecting to N8N workflows for label generation and tracking.",
+  "requestFramePermissions": []
+}
